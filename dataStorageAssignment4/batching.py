@@ -1,5 +1,6 @@
 import time
 import psycopg2
+import psycopg2.extras
 import argparse
 import re
 import csv
@@ -86,14 +87,51 @@ def readdata(fname):
 
     return rowlist
 
-def getSQLcmnds(rowlist):
-    cmdlist = []
-    for row in rowlist:
-        valstr = row2vals(row)
-        cmd = f"INSERT INTO {TableName} VALUES ({valstr});"
-        cmdlist.append(cmd)
+def insert_batch(conn, rowlist):
 
-    return cmdlist
+    psycopg2.extras.execute_batch(conn, """
+        INSERT INTO staging_census VALUES (
+                %(Year)s,
+                %(CensusTract)s,
+                %(State)s,
+                %(County)s,
+                %(TotalPop)s, 
+                %(Men)s,
+                %(Women)s,
+                %(Hispanic)s,
+                %(White)s,
+                %(Black)s,
+                %(Native)s,
+                %(Asian)s,
+                %(Pacific)s,
+                %(Citizen)s,
+                %(Income)s,
+                %(IncomeErr)s,
+                %(IncomePerCap)s,
+                %(IncomePerCapErr)s,
+                %(IncomePerCapErr)s,
+                %(Poverty)s,
+                %(ChildPoverty)s,
+                %(Professional)s,
+                %(Service)s, 
+                %(Office)s,
+                %(Construction)s,
+                %(Production)s,
+                %(Drive)s,
+                %(Carpool)s,
+                %(Transit)s,
+                %(Walk)s,
+                %(OtherTransp),
+                %(WorkAtHome)s,
+                %(MeanCommute)s,
+                %(Employed)s,
+                %(PrivateWork)s,
+                %(PublicWork)s,
+                %(SelfEmployed)s,
+                %(FamilyWork)s,
+                %(Unemployment)s
+            );
+        """, rowlist)
 
 def dbconnect():
     connection = psycopg2.connect(
@@ -110,7 +148,8 @@ def createTable(conn):
 
     with conn.cursor() as cursor:
         cursor.execute(f"""
-            CREATE UNLOGGED TABLE IF NOT EXISTS {TableName} (
+            DROP TABLE IF EXISTS staging_census;
+            CREATE UNLOGGED TABLE staging_census (
                 Year                INTEGER,
                 CensusTract         NUMERIC,
                 State               TEXT,
@@ -151,36 +190,81 @@ def createTable(conn):
                 Unemployment        DECIMAL
             );
             """)
-        print(f"Create {TableName}")
+        print(f"Create unlogged")
 
-def load(conn, icmdlist):
+def load(conn):
 
     with conn.cursor() as cursor:
-        print(f"Loading {len(icmdlist)} rows")
         start = time.perf_counter()
 
-        for cmd in icmdlist:
-            # print(cmd)
-            cursor.execute(cmd)
-        '''        
+
+        rlis = readdata(Datafile)
+        data = [{
+            'Year': Year,
+            **row,
+        } for row in rlis]
+        print(rlis[1])
+        print(data[1])
+        psycopg2.extras.execute_batch(cursor, """
+            INSERT INTO staging_census VALUES (
+                    %(Year)s,
+                    %(CensusTract)s,
+                    %(State)s,
+                    %(County)s,
+                    %(TotalPop)s, 
+                    %(Men)s,
+                    %(Women)s,
+                    %(Hispanic)s,
+                    %(White)s,
+                    %(Black)s,
+                    %(Native)s,
+                    %(Asian)s,
+                    %(Pacific)s,
+                    %(Citizen)s,
+                    %(Income)s,
+                    %(IncomeErr)s,
+                    %(IncomePerCap)s,
+                    %(IncomePerCapErr)s,
+                    %(Poverty)s,
+                    %(ChildPoverty)s,
+                    %(Professional)s,
+                    %(Service)s, 
+                    %(Office)s,
+                    %(Construction)s,
+                    %(Production)s,
+                    %(Drive)s,
+                    %(Carpool)s,
+                    %(Transit)s,
+                    %(Walk)s,
+                    %(OtherTransp)s,
+                    %(WorkAtHome)s,
+                    %(MeanCommute)s,
+                    %(Employed)s,
+                    %(PrivateWork)s,
+                    %(PublicWork)s,
+                    %(SelfEmployed)s,
+                    %(FamilyWork)s,
+                    %(Unemployment)s
+                );
+            """, data) 
+
         cursor.execute(f"""
+            DROP TABLE IF EXISTS {TableName};
+            CREATE TABLE {TableName} AS TABLE staging_census;
             ALTER TABLE {TableName} ADD PRIMARY KEY (Year, CensusTract);
             CREATE INDEX idx_{TableName}_State ON {TableName}(State);
         """)
-        '''
         elapsed = time.perf_counter() - start
         print(f"Finished Loading. Elapsed Time: {elapsed:0.4} seconds")
 
 def main():
     initialize()
     conn = dbconnect()
-    rlis = readdata(Datafile)
-    cmdlist = getSQLcmnds(rlis)
 
     if CreateDB:
         createTable(conn)
 
-    load(conn, cmdlist)
+    load(conn)
 
 if __name__ == "__main__":
     main()

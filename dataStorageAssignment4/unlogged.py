@@ -90,7 +90,7 @@ def getSQLcmnds(rowlist):
     cmdlist = []
     for row in rowlist:
         valstr = row2vals(row)
-        cmd = f"INSERT INTO {TableName} VALUES ({valstr});"
+        cmd = f"INSERT INTO staging_census VALUES ({valstr});"
         cmdlist.append(cmd)
 
     return cmdlist
@@ -110,7 +110,8 @@ def createTable(conn):
 
     with conn.cursor() as cursor:
         cursor.execute(f"""
-            CREATE UNLOGGED TABLE IF NOT EXISTS {TableName} (
+            DROP TABLE IF EXISTS staging_census;
+            CREATE UNLOGGED TABLE staging_census (
                 Year                INTEGER,
                 CensusTract         NUMERIC,
                 State               TEXT,
@@ -151,7 +152,7 @@ def createTable(conn):
                 Unemployment        DECIMAL
             );
             """)
-        print(f"Create {TableName}")
+        print(f"Create staging_census")
 
 def load(conn, icmdlist):
 
@@ -160,14 +161,12 @@ def load(conn, icmdlist):
         start = time.perf_counter()
 
         for cmd in icmdlist:
-            # print(cmd)
             cursor.execute(cmd)
-        '''        
         cursor.execute(f"""
+            DROP TABLE staging_census;
             ALTER TABLE {TableName} ADD PRIMARY KEY (Year, CensusTract);
             CREATE INDEX idx_{TableName}_State ON {TableName}(State);
         """)
-        '''
         elapsed = time.perf_counter() - start
         print(f"Finished Loading. Elapsed Time: {elapsed:0.4} seconds")
 
