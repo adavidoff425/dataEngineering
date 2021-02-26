@@ -5,8 +5,13 @@ df = pd.read_csv('crashData.csv', usecols=['Crash ID', 'Record Type', 'Vehicle I
 
 # Separate csv file into three separate records
 crash_df = df[df['Record Type'] == 1]
+crash_df.dropna(axis=1, how='all')
+
 vehicle_df = df[df['Record Type'] == 2]
+vehicle_df.dropna(axis=1, how='all')
+
 person_df = df[df['Record Type'] == 3]
+person_df.dropna(axis=1, how='all')
 
 # Assertion 1a
 location_schema = DataFrameSchema({
@@ -96,8 +101,40 @@ if len(crash_df) == len(crash_df.drop_duplicates(subset=['Crash ID'])):
 
 print(len(df))
 loc_df = pd.DataFrame({
-  "Min": crash_df['Latitude Minutes'],
-  "Sec": crash_df['Latitude Seconds']
+  "LatMin": crash_df['Latitude Minutes'],
+  "LatSec": crash_df['Latitude Seconds'],
+  "LongMin": crash_df['Longitude Minutes'],
+  "LongSec": crash_df['Longitude Seconds']
 })
-same_loc_df = loc_df[loc_df.groupby('Min')['Sec'].transform('nunique').gt(1)]
-print(same_loc_df)
+
+seen = []
+same_loc_df = pd.DataFrame()
+
+def check_zones(df):
+  zones = []
+  for i in range(len(df)):
+    crash = crash_df.loc[df.iloc[i].name]
+    loc_zone = (crash['Work Zone Indicator'], 
+                  crash['School Zone Indicator'])
+    zones.append(loc_zone)
+    if not loc_zone[0] == zones[0][0]:
+      print("Work Zone discrepancy at crash with ID: " + str(crash['Crash ID']))
+    if not loc_zone[1] == zones[0][1]:
+      print("School Zone discrepancy at crash with ID: " + str(crash['Crash ID']))
+  print(zones)
+
+for i in range(len(crash_df)):
+  if same_loc_df.shape[0] > 1:
+    check_zones(same_loc_df)
+  same_loc_df = pd.DataFrame(loc_df.iloc[i]).T
+  if i not in seen:
+    seen.append(i)
+  else:
+    continue
+  for j in range(i+1, len(crash_df)):
+    if (loc_df.iloc[i].equals(loc_df.iloc[j])):
+      seen.append(j)
+      same_loc_df = same_loc_df.append(loc_df.iloc[j].T)
+
+
+
